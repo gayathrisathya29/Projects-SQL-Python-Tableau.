@@ -1,1 +1,323 @@
+---To get Whole Table
+Select * from store_sales;
 
+/* check first 10 rows */
+SELECT  * 
+FROM store_sales
+FETCH FIRST 10 ROWS ONLY;
+
+/* check how many rows */
+SELECT COUNT(*)
+FROM store_sales;
+
+/* how many rows in each month */
+SELECT month_of_year, COUNT(*) AS total
+FROM store_sales
+GROUP BY month_of_year
+ORDER BY month_of_year ASC;
+
+/* maximum number of employees during any shift of the year */
+SELECT MAX(employee_shifts)
+FROM store_sales;
+
+/* what is the smallest number of employees during any shift of the year */
+SELECT MIN(employee_shifts)
+FROM store_sales;
+
+/* min, max together */
+SELECT MAX(employee_shifts), MIN(employee_shifts)
+FROM store_sales;
+
+/* min, max employees in during per shift of the year*/
+SELECT month_of_year, MAX(employee_shifts), MIN(employee_shifts)
+FROM store_sales
+GROUP BY month_of_year
+ORDER BY month_of_year ASC;
+
+/******************************************************************/
+
+/* What is the total unit sold? */
+SELECT SUM(units_sold)
+FROM store_sales;
+
+/* What is the total unit sold , avg unit sold per month? */
+SELECT month_of_year, SUM(units_sold) AS total_unit_sold, ROUND(AVG(units_sold), 2) AS average_unit_sold
+FROM store_sales
+GROUP BY month_of_year
+ORDER BY month_of_year ASC;
+
+/********************** Standard Deviation & Variance ********************************************/
+
+/* How spread out the unit sold in each month? */
+/* As we can see from the result, variance values quite high. Because variance measures in squared. 
+So better way to get a sense of spread out is standard deviation */
+SELECT 
+	month_of_year, 
+	SUM(units_sold) AS total_unit_sold, 
+	ROUND(AVG(units_sold), 2) AS average_unit_sold,
+	VAR_POP(units_sold) AS variance_units_sold,
+	STDDEV_POP(units_sold) AS std_units_sold
+FROM store_sales
+GROUP BY month_of_year
+ORDER BY month_of_year ASC;
+
+/* Interpretation based on data: 
+For month 1, it seems like stddev is pretty close around 3.48 across the sales.
+
+However like month 12, it seems like stddev is very large 231.15 across the sales. 
+So it seems like in some sales, many units are sold in large quanity and some sales aren't. 
+So we can check whether our assumptions are correct or not */
+
+/* When we check the data and our assumptions are correct.
+* for 12 month, lowest sales is 0 and largest sale is 879 which leads to large value of stddev.*/ 
+SELECT 
+	month_of_year, 
+	MIN(units_sold),
+	MAX(units_sold)
+FROM store_sales
+GROUP BY month_of_year
+ORDER BY month_of_year ASC;
+
+
+/********************** Percentiles ********************************************/
+/*
+
+Percentiles : One hundreds equal groups; population divided across group
+Percentiles help us understand the distribution of data by grouping values into equal sized buckets.
+
+Discrete Percentile: returns value that exists in the column.
+Discrete Percentile is very useful whey you want to know the value in the column, that falls into a percentile.
+
+Continuous Percentile: interpolates the boundary value between the percentiles.
+Continuous Percentile is very useful when you want to know what is the value at the boundary between two percentile buckets.
+
+Differences between Discrete and Continuous Percentile : 
+- http://mfzahirdba.blogspot.com/2012/09/difference-between-percentilecont-and.html 
+- https://stackoverflow.com/questions/23585667/percentile-disc-vs-percentile-cont
+
+*/
+
+
+SELECT * FROM store_sales
+FETCH FIRST 10 ROWS ONLY;
+
+/* What are the top sales data ? */
+/* Data Interpretion: 
+it seems like top sales are coming from 12 month, which is not suprising due to seasonality trend of holidays */
+SELECT *
+FROM store_sales
+ORDER BY revenue DESC
+FETCH FIRST 10 ROWS ONLY;
+
+/* What about average of sales ? */
+/* the average revenue is about 5806.16$ but it doesn't tell us the full story, like
+- Are there many days with low sales?
+- Are there many days with high sales? 
+- or our sales evenly distributed across all days?
+*/
+SELECT AVG(revenue)
+FROM store_sales;
+
+/****** we can use percentiles to answer above question and understand our data distributions *******/
+
+
+					/*** Percentile Discrete Function ***/
+					
+/* get 50 percentile of revenue, it seem like 50 percentile of revenue 5856$
+is not too far off from the average sales 5806.16$*/
+SELECT 
+	PERCENTILE_DISC(0.5) WITHIN GROUP(ORDER BY revenue) AS pct_50_revenue
+FROM store_sales;
+
+
+/* let's look at 50th, 60th , 90th , 95th percentiles */
+SELECT
+	PERCENTILE_DISC(0.5) WITHIN GROUP(ORDER BY revenue) AS pct_50_revenues,
+	PERCENTILE_DISC(0.6) WITHIN GROUP(ORDER BY revenue) AS pct_60_revenues,
+	PERCENTILE_DISC(0.9) WITHIN GROUP(ORDER BY revenue) AS pct_90_revenues,
+	PERCENTILE_DISC(0.95) WITHIN GROUP(ORDER BY revenue) AS pct_95_revenues
+FROM store_sales;
+
+
+					/*** Percentile Continuous Function ***/
+
+SELECT 
+	PERCENTILE_CONT(0.95) WITHIN GROUP(ORDER BY revenue) AS pct_95_cont_revenues,
+	PERCENTILE_DISC(0.95) WITHIN GROUP(ORDER BY revenue) AS pct_95_disc_revenues
+FROM store_sales;
+
+/*********** Correlation and Ranks ***********/
+
+/* check the correlation between revenue and unit sold */
+/* we can see that there is high correlation between revenue and units sold, which make sense.*/
+SELECT CORR(units_sold, revenue)
+FROM store_sales;
+
+
+/* What about correlation between unit sold and number of employees on shift? */
+/* As per the result, there is a positive correlation of 0.5593 but not as strong as between units sold and revenue */
+SELECT CORR(units_sold, employee_shifts)
+FROM store_sales;
+
+
+/* What about correlation between unit sold and month of the year */
+/* As per the result, there is a very very low positive correlation of 0.128.
+which again make sense because month value increase from 1 to 12 and revenue gets high on december although these 1, 2,..1
+numbers shouldn't have no correlation with the unit sold.
+*/
+SELECT CORR(units_sold, month_of_year)
+FROM store_sales;
+
+
+/*-------------------------------------------------------------------------------------------*/
+
+
+/*********** Rows Number ***********/
+/* 
+Row Number is a window function which operates on ordered set. It is added as a new column to the result.
+It is very useful when we want to assign row order based on the ordered list.
+*/
+
+/* We want to add a row number based on the units sold */
+SELECT
+	ROW_NUMBER() OVER(ORDER BY units_sold),
+	sale_date,
+	month_of_year,
+	units_sold
+FROM store_sales;
+
+
+/* We also want to know the standing (rank) of month_of_year based on the units sold */
+SELECT
+	ROW_NUMBER() OVER(ORDER BY units_sold),
+	sale_date,
+	month_of_year,
+	units_sold
+FROM store_sales
+ORDER BY month_of_year;
+
+/*-------------------------------------------------------------------------------------------*/
+
+
+/*********** Mode ***********/
+
+/* What is the frequently occuring numbers of employee per shift in each month? */
+/* we can see that May through July and December are the months which have most number of employee on shifts*/
+
+SELECT
+    month_of_year as mode_month
+FROM
+    (
+SELECT
+    month_of_year,
+    cnt,
+    DENSE_RANK() OVER(
+        ORDER BY
+            cnt DESC
+    ) as rnk
+FROM
+    (
+        SELECT
+            month_of_year,
+            COUNT(*) as cnt
+        FROM store_sales
+GROUP BY month_of_year
+    ) x
+    ) y
+WHERE
+    rnk = 1
+
+
+/***************** Linear Models ****************/
+
+/* Linear Model such as regression are useful for estimating values for business.
+Such as: We just run an advertising campaign and expect to sell more items than usual.
+How many employees should we have working?
+*/
+
+/*********** Computing Intercept (employee shifts on y-axis and units sold in x-asis) *********/
+/* Result: 2.64581850 */
+SELECT
+	REGR_INTERCEPT(employee_shifts, units_sold)
+FROM store_sales;
+
+
+/* What about we want to know number of units sold based on the the employees on shift? */
+SELECT
+	REGR_INTERCEPT(units_sold, employee_shifts)
+FROM store_sales;
+
+
+/* ---------------------------------------------------------------------- */
+
+/*********** Computing Slope (employee shifts on y-axis and units sold in x-asis) *********/
+/* Result: 0.003076239751 */
+SELECT
+	REGR_SLOPE(employee_shifts, units_sold)
+FROM store_sales;
+
+/* ---------------------------------------------------------------------- */
+
+/* 
+Linear Regression: y=mx+b
+
+The ultimate question: How many employees we should have working to accomodate the sales of 1,500 items? 
+*/
+SELECT
+	REGR_SLOPE(employee_shifts, units_sold) * 1500 + REGR_INTERCEPT(employee_shifts, units_sold) AS estimated_employees
+FROM store_sales;
+
+/*
+Based on the results, we expect to have 7.26 (around 7 employees) to handle to sales of 1,500 items.
+*/
+
+/*  Null Check  */
+SELECT * FROM store_sales 
+WHERE units_sold IS NULL;
+
+
+/*  Out of Range Values */
+SELECT * FROM store_sales WHERE employee_shifts > 10 OR employee_shifts < 0
+
+
+/* Check for MInium, Maximum, Median , Count & Order By */
+SELECT MIN(month_of_year) FROM store_sales;
+SELECT MAX(month_of_year) FROM store_sales;
+SELECT MIN(units_sold), MAX(month_of_year), MIN(sale_date) FROM store_sales;
+SELECT MEDIAN(month_of_year) FROM store_sales;
+SELECT COUNT(month_of_year) FROM store_sales ORDER BY month_of_year;
+
+/* Simple Histogram Calculation */
+SELECT FLOOR(units_sold/5) as bucket FROM Store_sales;
+
+SELECT FLOOR(units_sold/5) as bucket, FLOOR(units_sold/5) * 5 AS bucket_floor FROM Store_sales;
+
+Select * from(
+SELECT AVG(units_sold) ,FLOOR(units_sold/5) * 5 AS bucket_floor FROM Store_sales
+group by units_sold)
+ORDER BY bucket_floor;
+
+/* Simple Histogram Visualization */
+
+Select   B.bucket_floor,
+     B.bucket_name,
+     B.count_all,
+    REPEAT('*',   B.bucket_floor) as bar
+from
+(select 
+    a.bucket_floor,
+    CONCAT(a.bucket_floor ,a.bucket_ceiling) as bucket_name,
+    count(a.month_of_year) as count_all
+    
+from (
+	select month_of_year,
+		FLOOR(units_sold/5) * 5 as bucket_floor,
+		(- FLOOR(units_sold/5) * 5 + 5) as bucket_ceiling
+	 FROM Store_sales
+) a
+group by a.month_of_year,a.bucket_floor,a.bucket_ceiling
+order by a.month_of_year) B
+;
+
+/* Correlation */
+SELECT CORR(units_sold, revenue) FROM Store_sales
